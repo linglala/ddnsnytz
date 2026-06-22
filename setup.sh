@@ -17,7 +17,7 @@ fi
 : "${RECORD_NAME:?错误：请先导出 RECORD_NAME}"
 : "${TG_BOT_TOKEN:?错误：请先导出 TG_BOT_TOKEN}"
 : "${TG_CHAT_ID:?错误：请先导出 TG_CHAT_ID}"
-TTL="${TTL:-1}"
+TTL="${TTL:-60}"
 PROXIED="${PROXIED:-false}"
 
 DDNS_SCRIPT_PATH="/usr/local/bin/cf-ddns-dual.sh"
@@ -63,24 +63,6 @@ for tool in curl wget; do
         echo "$tool 已存在，跳过。"
     fi
 done
-
-# 检查并安装 cron
-if ! command -v crontab &>/dev/null; then
-    echo "未找到 crontab，正在安装 cron..."
-    install_pkg cron
-    command -v crontab &>/dev/null || { echo "错误：cron 安装失败！"; exit 1; }
-    echo "cron 安装成功。"
-else
-    echo "cron 已存在，跳过。"
-fi
-
-# 确保 cron 服务已启动
-if command -v systemctl &>/dev/null; then
-    systemctl enable cron 2>/dev/null || systemctl enable crond 2>/dev/null || true
-    systemctl start cron 2>/dev/null || systemctl start crond 2>/dev/null || true
-elif command -v service &>/dev/null; then
-    service cron start 2>/dev/null || service crond start 2>/dev/null || true
-fi
 
 echo "------------------------------------------"
 
@@ -199,25 +181,55 @@ echo "成功：DDNS 脚本已生成 → $DDNS_SCRIPT_PATH"
 
 echo "------------------------------------------"
 
-# ---- 步骤 3：设置 Cron 定时任务 ----
-echo "步骤 3: 设置 Cron 定时任务（每分钟）..."
+# ---- 步骤 3：使用 systemd timer 替代 cron ----
+echo "步骤 3: 设置 systemd timer 定时任务（每分钟）..."
 
-crontab -l 2>/dev/null | grep -q "$DDNS_SCRIPT_PATH" \
-    && echo "定时任务已存在，跳过。" \
-    || { (crontab -l 2>/dev/null; echo "* * * * * $DDNS_SCRIPT_PATH >> $LOG_PATH 2>&1") | crontab -
-         echo "定时任务设置成功！"; }
+cat > /etc/systemd/system/cf-ddns.service << 'UNIT'
+[Unit]
+Description=Cloudflare DDNS Update
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cf-ddns-dual.sh
+StandardOutput=append:/var/log/cf-ddns-dual.log
+StandardError=append:/var/log/cf-ddns-dual.log
+UNIT
+
+cat > /etc/systemd/system/cf-ddns.timer << 'UNIT'
+[Unit]
+Description=Cloudflare DDNS Update Timer
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now cf-ddns.timer
+systemctl list-timers cf-ddns.timer --no-pager
+
+echo "定时任务设置成功！"
+echo "------------------------------------------"
+
+# ---- 步骤 4：立即执行一次 DDNS ----
+echo "步骤 4: 立即执行一次 DDNS 检测..."
+bash "$DDNS_SCRIPT_PATH"
 
 echo "------------------------------------------"
 
-# ---- 步骤 4：部署 nyanpass ----
-echo "步骤 4: 部署 nyanpass 节点客户端..."
+# ---- 步骤 5：部署 nyanpass ----
+echo "步骤 5: 部署 nyanpass 节点客户端..."
 printf '\n\n\n' | bash <(curl -fLSs https://dl.nyafw.com/download/nyanpass-install.sh) rel_nodeclient \
     "-t 5a067af7-6d14-4c43-bc11-cec264fd35b5 -u https://ny.128111.xyz"
 
 echo "------------------------------------------"
 
-# ---- 步骤 5：部署 komari-agent ----
-echo "步骤 5: 部署 komari-agent 监控客户端..."
+# ---- 步骤 6：部署 komari-agent ----
+echo "步骤 6: 部署 komari-agent 监控客户端..."
 wget -qO- https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/install.sh \
     | bash -s -- -e https://tz.098757.xyz -t E4NxDKoH19Q1zlu0DPk2aH --disable-web-ssh
 
@@ -225,6 +237,7 @@ echo "=========================================="
 echo "部署全部完成！"
 echo "时区:       Asia/Shanghai（$(date '+%Z %z')）"
 echo "DDNS 脚本:  $DDNS_SCRIPT_PATH"
-echo "Cron 日志:  $LOG_PATH"
+echo "日志:       $LOG_PATH"
+echo "定时方式:   systemd timer（每分钟）"
 echo "Telegram:   已配置（IP 变更时推送）"
 echo "=========================================="
