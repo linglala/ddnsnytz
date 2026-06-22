@@ -64,6 +64,24 @@ for tool in curl wget; do
     fi
 done
 
+# 检查并安装 cron
+if ! command -v crontab &>/dev/null; then
+    echo "未找到 crontab，正在安装 cron..."
+    install_pkg cron
+    command -v crontab &>/dev/null || { echo "错误：cron 安装失败！"; exit 1; }
+    echo "cron 安装成功。"
+else
+    echo "cron 已存在，跳过。"
+fi
+
+# 确保 cron 服务已启动
+if command -v systemctl &>/dev/null; then
+    systemctl enable cron 2>/dev/null || systemctl enable crond 2>/dev/null || true
+    systemctl start cron 2>/dev/null || systemctl start crond 2>/dev/null || true
+elif command -v service &>/dev/null; then
+    service cron start 2>/dev/null || service crond start 2>/dev/null || true
+fi
+
 echo "------------------------------------------"
 
 # ---- 步骤 2：生成 DDNS 核心脚本 ----
@@ -86,9 +104,11 @@ OLD_IP_FILE="$OLD_IP_FILE"
 
 send_tg_notify() {
     local msg=\$1
-    curl -s -X POST "https://api.telegram.org/bot\${TG_BOT_TOKEN}/sendMessage" \\
+    local tg_resp
+    tg_resp=\$(curl -s -X POST "https://api.telegram.org/bot\${TG_BOT_TOKEN}/sendMessage" \\
         -d chat_id="\${TG_CHAT_ID}" \\
-        -d text="\${msg}" > /dev/null 2>&1
+        -d text="\${msg}" 2>&1)
+    echo "\$(date): TG 推送结果: \$tg_resp"
 }
 
 update_dns_record() {
