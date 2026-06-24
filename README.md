@@ -36,7 +36,7 @@ export RECORD_NAME="你的域名"
 export TG_BOT_TOKEN="你的值"
 export TG_CHAT_ID="你的值"
 
-bash <(curl -fsSL https://raw.githubusercontent.com/你的用户名/仓库名/main/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/linglala/ddnsnytz/main/setup.sh)
 ```
 
 ## 注意事项
