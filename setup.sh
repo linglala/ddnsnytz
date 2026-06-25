@@ -5,7 +5,6 @@
 #   source config.env && sudo -E bash setup.sh
 # ==================================================
 
-# 确保以 root 权限运行
 if [ "$EUID" -ne 0 ]; then
   echo "请使用 root 权限或 sudo 运行此脚本！"
   exit 1
@@ -19,6 +18,10 @@ fi
 : "${TG_CHAT_ID:?错误：请先导出 TG_CHAT_ID}"
 TTL="${TTL:-60}"
 PROXIED="${PROXIED:-false}"
+
+# ---- 面板上报配置（从环境变量，可选） ----
+PANEL_URL="${PANEL_URL:-}"
+REPORT_KEY="${REPORT_KEY:-}"
 
 DDNS_SCRIPT_PATH="/usr/local/bin/cf-ddns-dual.sh"
 LOG_PATH="/var/log/cf-ddns-dual.log"
@@ -71,10 +74,6 @@ echo "步骤 2: 正在生成双栈 DDNS 核心脚本..."
 
 cat << EOF > "$DDNS_SCRIPT_PATH"
 #!/bin/bash
-# ====================================================
-# Cloudflare IPv4/IPv6 双栈 DDNS 独立核心脚本
-# 由 setup.sh 自动生成，请勿手动编辑配置值
-# ====================================================
 API_TOKEN="$API_TOKEN"
 ZONE_ID="$ZONE_ID"
 RECORD_NAME="$RECORD_NAME"
@@ -83,14 +82,25 @@ PROXIED=$PROXIED
 TG_BOT_TOKEN="$TG_BOT_TOKEN"
 TG_CHAT_ID="$TG_CHAT_ID"
 OLD_IP_FILE="$OLD_IP_FILE"
+PANEL_URL="$PANEL_URL"
+REPORT_KEY="$REPORT_KEY"
 
 send_tg_notify() {
     local msg=\$1
-    local tg_resp
-    tg_resp=\$(curl -s -X POST "https://api.telegram.org/bot\${TG_BOT_TOKEN}/sendMessage" \\
+    curl -s -X POST "https://api.telegram.org/bot\${TG_BOT_TOKEN}/sendMessage" \\
         -d chat_id="\${TG_CHAT_ID}" \\
-        -d text="\${msg}" 2>&1)
-    echo "\$(date): TG 推送结果: \$tg_resp"
+        -d text="\${msg}" > /dev/null 2>&1
+}
+
+report_to_panel() {
+    local ip=\$1
+    local ipv6=\$2
+    [ -z "\$PANEL_URL" ] || [ -z "\$REPORT_KEY" ] && return
+    INSTANCE_ID=\$(curl -s --max-time 5 http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || echo "")
+    curl -s -X POST "\${PANEL_URL}/api/report-ip" \\
+        -H "Content-Type: application/json" \\
+        -H "X-Access-Key: \${REPORT_KEY}" \\
+        -d "{\\"instance_id\\": \\"\${INSTANCE_ID}\\", \\"ip\\": \\"\${ip}\\", \\"ipv6\\": \\"\${ipv6}\\"}" > /dev/null 2>&1
 }
 
 update_dns_record() {
@@ -150,7 +160,7 @@ if [ -z "\$CURRENT_IPV4" ] && [ -z "\$CURRENT_IPV6" ]; then
     exit 1
 fi
 
-# ---- IP 变更通知 ----
+# ---- IP 变更通知 + 面板上报 ----
 if [ -n "\$CURRENT_IPV4" ]; then
     OLD_IP=\$(cat "\$OLD_IP_FILE" 2>/dev/null)
     if [ "\$CURRENT_IPV4" != "\$OLD_IP" ]; then
@@ -168,12 +178,15 @@ if [ -n "\$CURRENT_IPV4" ]; then
         fi
         send_tg_notify "\$MSG"
         echo "\$CURRENT_IPV4" > "\$OLD_IP_FILE"
+        # IP 变化时上报到面板
+        report_to_panel "\$CURRENT_IPV4" "\$CURRENT_IPV6"
+        echo "\$(date): 已上报新IP到面板: \$CURRENT_IPV4"
     fi
 fi
 
 # ---- 更新 DNS ----
 [ -n "\$CURRENT_IPV4" ] && update_dns_record "A" "\$CURRENT_IPV4"
-# [ -n "\$CURRENT_IPV6" ] && update_dns_record "AAAA" "\$CURRENT_IPV6"  # 如需 IPv6 取消注释
+# [ -n "\$CURRENT_IPV6" ] && update_dns_record "AAAA" "\$CURRENT_IPV6"
 EOF
 
 chmod +x "$DDNS_SCRIPT_PATH"
@@ -240,4 +253,5 @@ echo "DDNS 脚本:  $DDNS_SCRIPT_PATH"
 echo "日志:       $LOG_PATH"
 echo "定时方式:   systemd timer（每分钟）"
 echo "Telegram:   已配置（IP 变更时推送）"
+echo "面板上报:   ${PANEL_URL:-未配置}"
 echo "=========================================="
