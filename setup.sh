@@ -1,8 +1,6 @@
 #!/bin/bash
 # ==================================================
 # 一键部署脚本
-# 使用前请先导出环境变量，或执行：
-#   source config.env && sudo -E bash setup.sh
 # ==================================================
 
 if [ "$EUID" -ne 0 ]; then
@@ -19,9 +17,10 @@ fi
 TTL="${TTL:-60}"
 PROXIED="${PROXIED:-false}"
 
-# ---- 面板上报配置（从环境变量，可选） ----
+# ---- 面板上报配置（可选） ----
 PANEL_URL="${PANEL_URL:-}"
 REPORT_KEY="${REPORT_KEY:-}"
+PROFILE_ID="${PROFILE_ID:-}"  # aws.sb 的 Profile ID，补机后用于匹配实例
 
 DDNS_SCRIPT_PATH="/usr/local/bin/cf-ddns-dual.sh"
 LOG_PATH="/var/log/cf-ddns-dual.log"
@@ -34,7 +33,6 @@ echo "步骤 0: 设置时区为 Asia/Shanghai..."
 timedatectl set-timezone Asia/Shanghai 2>/dev/null \
   || ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 echo "当前时间：$(date)"
-
 echo "------------------------------------------"
 
 # ---- 步骤 1：检查并安装依赖 ----
@@ -84,6 +82,7 @@ TG_CHAT_ID="$TG_CHAT_ID"
 OLD_IP_FILE="$OLD_IP_FILE"
 PANEL_URL="$PANEL_URL"
 REPORT_KEY="$REPORT_KEY"
+PROFILE_ID="$PROFILE_ID"
 
 send_tg_notify() {
     local msg=\$1
@@ -100,7 +99,7 @@ report_to_panel() {
     curl -s -X POST "\${PANEL_URL}/api/report-ip" \\
         -H "Content-Type: application/json" \\
         -H "X-Access-Key: \${REPORT_KEY}" \\
-        -d "{\\"instance_id\\": \\"\${INSTANCE_ID}\\", \\"ip\\": \\"\${ip}\\", \\"ipv6\\": \\"\${ipv6}\\"}" > /dev/null 2>&1
+        -d "{\\"instance_id\\": \\"\${INSTANCE_ID}\\", \\"profile_id\\": \\"\${PROFILE_ID}\\", \\"ip\\": \\"\${ip}\\", \\"ipv6\\": \\"\${ipv6}\\"}" > /dev/null 2>&1
 }
 
 update_dns_record() {
@@ -178,7 +177,6 @@ if [ -n "\$CURRENT_IPV4" ]; then
         fi
         send_tg_notify "\$MSG"
         echo "\$CURRENT_IPV4" > "\$OLD_IP_FILE"
-        # IP 变化时上报到面板
         report_to_panel "\$CURRENT_IPV4" "\$CURRENT_IPV6"
         echo "\$(date): 已上报新IP到面板: \$CURRENT_IPV4"
     fi
@@ -191,10 +189,9 @@ EOF
 
 chmod +x "$DDNS_SCRIPT_PATH"
 echo "成功：DDNS 脚本已生成 → $DDNS_SCRIPT_PATH"
-
 echo "------------------------------------------"
 
-# ---- 步骤 3：使用 systemd timer 替代 cron ----
+# ---- 步骤 3：使用 systemd timer ----
 echo "步骤 3: 设置 systemd timer 定时任务（每分钟）..."
 
 cat > /etc/systemd/system/cf-ddns.service << 'UNIT'
@@ -224,21 +221,18 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now cf-ddns.timer
 systemctl list-timers cf-ddns.timer --no-pager
-
 echo "定时任务设置成功！"
 echo "------------------------------------------"
 
 # ---- 步骤 4：立即执行一次 DDNS ----
 echo "步骤 4: 立即执行一次 DDNS 检测..."
 bash "$DDNS_SCRIPT_PATH"
-
 echo "------------------------------------------"
 
 # ---- 步骤 5：部署 nyanpass ----
 echo "步骤 5: 部署 nyanpass 节点客户端..."
 printf '\n\n\n' | bash <(curl -fLSs https://dl.nyafw.com/download/nyanpass-install.sh) rel_nodeclient \
     "-t 5a067af7-6d14-4c43-bc11-cec264fd35b5 -u https://ny.128111.xyz"
-
 echo "------------------------------------------"
 
 # ---- 步骤 6：部署 komari-agent ----
@@ -254,4 +248,5 @@ echo "日志:       $LOG_PATH"
 echo "定时方式:   systemd timer（每分钟）"
 echo "Telegram:   已配置（IP 变更时推送）"
 echo "面板上报:   ${PANEL_URL:-未配置}"
+echo "Profile ID: ${PROFILE_ID:-未配置}"
 echo "=========================================="
