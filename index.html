@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AWS.sb 面板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f5f5;--bg2:#fff;--bg3:#f9fafb;
+  --border:#e5e7eb;--border2:#d1d5db;
+  --text:#111;--text2:#6b7280;--text3:#9ca3af;
+  --green:#16a34a;--green-bg:#f0fdf4;--green-border:#bbf7d0;
+  --red:#dc2626;--red-bg:#fef2f2;--red-border:#fecaca;
+  --yellow:#d97706;--yellow-bg:#fffbeb;--yellow-border:#fde68a;
+  --blue:#1d4ed8;--blue-bg:#eff6ff;--blue-border:#bfdbfe;
+  --purple:#7c3aed;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Inter',sans-serif;font-size:14px;min-height:100vh}
+
+/* Nav */
+.nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.nav-left{display:flex;align-items:center;gap:8px}
+.nav-logo{width:28px;height:28px;background:#111;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;flex-shrink:0}
+.nav-title{font-size:14px;font-weight:600}
+.nav-right{display:flex;align-items:center;gap:6px}
+
+/* Buttons */
+.btn{background:var(--bg2);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all 0.15s;white-space:nowrap}
+.btn:hover{background:var(--bg3)}
+.btn-dark{background:#111;border-color:#111;color:#fff}
+.btn-dark:hover{background:#333}
+.btn-blue{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)}
+.btn-red{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
+.btn-green{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.btn-sm{padding:4px 8px;font-size:11px}
+.btn-xs{padding:3px 7px;font-size:11px}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:20px;font-weight:500}
+.badge-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* Main */
+.main{padding:16px;max-width:1100px;margin:0 auto}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.stat-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px}
+.stat-value{font-size:20px;font-weight:600}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* Section */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.section-title{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px}
+
+/* Group */
+.group-block{margin-bottom:20px}
+.group-header{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none}
+.group-name{font-size:13px;font-weight:600;flex:1}
+.group-cf-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+.group-no-cf{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+
+/* Table */
+.table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:0 0 10px 10px;overflow:hidden;margin-bottom:0}
+.no-group .table-wrap{border-radius:10px}
+table{width:100%;border-collapse:collapse}
+th{padding:9px 12px;text-align:left;font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid #f9fafb;vertical-align:middle;color:var(--text2);font-size:13px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.iname{font-weight:500;color:var(--text);font-size:13px}
+.iid{font-size:10px;color:var(--text3);font-family:monospace;margin-top:1px}
+.ip-cell{font-family:monospace;font-size:11px}
+.ip-cell span{display:block;line-height:1.7}
+
+/* Status */
+.status{display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:3px 7px;border-radius:5px;font-weight:500;white-space:nowrap}
+.status-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.status-fail{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.status-warn{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border)}
+.status-unknown{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+.status-replacing{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);animation:blink 1s infinite}
+.status-skip{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.5}}
+
+/* Toggle */
+.toggle{position:relative;width:32px;height:18px;cursor:pointer;display:inline-block;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:var(--border2);border-radius:9px;transition:0.2s}
+.toggle-slider:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;background:#fff;border-radius:50%;transition:0.2s}
+.toggle input:checked+.toggle-slider{background:var(--green)}
+.toggle input:checked+.toggle-slider:before{transform:translateX(14px)}
+
+/* History */
+.history-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.history-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f9fafb;font-size:12px}
+.history-item:last-child{border-bottom:none}
+.h-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-weight:600}
+.h-icon-success{background:var(--green-bg);color:var(--green)}
+.h-icon-error{background:var(--red-bg);color:var(--red)}
+.h-icon-info{background:var(--blue-bg);color:var(--blue)}
+.h-text{flex:1;color:var(--text2);min-width:0}.h-text strong{color:var(--text)}
+.h-time{color:var(--text3);white-space:nowrap;font-size:11px;flex-shrink:0}
+.history-empty{padding:32px;text-align:center;color:var(--text3)}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:flex-end;justify-content:center;z-index:100;backdrop-filter:blur(2px)}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:14px 14px 0 0;padding:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto}
+.modal-drag{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:16px}
+.form-group{margin-bottom:12px}
+.form-label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px;font-weight:500}
+.form-input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:7px;font-size:13px;outline:none;transition:border-color 0.15s}
+.form-input:focus{border-color:#111}
+.form-input.mono{font-family:monospace}
+.form-row{display:flex;gap:10px}
+.form-row .form-group{flex:1}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.hint{font-size:11px;color:var(--text3);margin-top:4px}
+.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
+.settings-section h4{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+.switch-label{font-size:13px;color:var(--text)}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:200;opacity:0;transition:all 0.25s;max-width:300px;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-success{border-color:var(--green-border);color:var(--green)}
+.toast-error{border-color:var(--red-border);color:var(--red)}
+.toast-info{border-color:var(--blue-border);color:var(--blue)}
+
+/* Mobile card view */
+.mobile-card{display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
+.mobile-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.mobile-card-name{font-weight:600;font-size:14px}
+.mobile-card-id{font-size:10px;color:var(--text3);font-family:monospace}
+.mobile-card-ip{font-family:monospace;font-size:12px;color:var(--text2);margin-bottom:10px}
+.mobile-card-status{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.mobile-card-actions{display:flex;gap:6px;align-items:center}
+
+/* Desktop table, mobile cards */
+@media(max-width:768px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .desktop-table{display:none}
+  .mobile-cards{display:block}
+  .nav-title{font-size:13px}
+  .main{padding:12px}
+  .modal{border-radius:14px 14px 0 0}
+  .hide-mobile{display:none}
+  .stat-value{font-size:18px}
+}
+@media(min-width:769px){
+  .mobile-cards{display:none}
+  .modal-overlay{align-items:center}
+  .modal{border-radius:14px;max-height:85vh}
+  .modal-drag{display:none}
+}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-left">
+    <div class="nav-logo">☁</div>
+    <span class="nav-title">AWS.sb 面板</span>
+    <span class="badge badge-green" id="monitor-badge"><span class="dot"></span>监控中</span>
+  </div>
+  <div class="nav-right">
+    <button class="btn hide-mobile" onclick="openImport()">⬇ 导入</button>
+    <button class="btn" onclick="openGroupManager()">分组管理</button>
+    <button class="btn btn-dark hide-mobile" onclick="openAddModal()">+ 实例</button>
+    <button class="btn hide-mobile" onclick="openSettings()">⚙</button>
+    <button class="btn hide-mobile" onclick="logout()">退出</button>
+    <button class="btn" onclick="openMenu()" style="display:none" id="menu-btn">☰</button>
+  </div>
+</nav>
+
+<div class="main">
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">实例总数</div>
+      <div class="stat-value" id="s-total">0</div>
+      <div class="stat-sub">已配置</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">IPv4 正常</div>
+      <div class="stat-value" style="color:var(--green)" id="s-ok4">0</div>
+      <div class="stat-sub">/ <span id="s-total2">0</span> 台</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">IPv6 正常</div>
+      <div class="stat-value" style="color:var(--blue)" id="s-ok6">0</div>
+      <div class="stat-sub">/ <span id="s-total3">0</span> 台</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日换IP</div>
+      <div class="stat-value" style="color:var(--purple)" id="s-replaced">0</div>
+      <div class="stat-sub">次</div>
+    </div>
+  </div>
+
+  <!-- 实例列表 -->
+  <div class="section-header">
+    <span class="section-title">实例列表</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" onclick="refreshInstances()">↻ 刷新</button>
+      <button class="btn btn-sm btn-red" onclick="replaceAll()">⚡ 全部换IP</button>
+      <button class="btn btn-sm btn-dark" onclick="openAddModal()" style="display:none" id="add-inst-btn">+ 实例</button>
+    </div>
+  </div>
+
+  <div id="instances-container"></div>
+
+  <!-- 历史 -->
+  <div class="section-header" style="margin-top:20px">
+    <span class="section-title">换IP历史</span>
+    <button class="btn btn-sm" onclick="clearHistory()">清空</button>
+  </div>
+  <div class="history-wrap">
+    <div id="history-list"><div class="history-empty">暂无记录</div></div>
+  </div>
+</div>
+
+<!-- 分组管理弹窗 -->
+<div class="modal-overlay" id="group-manager-modal" style="display:none" onclick="if(event.target===this)closeModal('group-manager-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <h3>分组管理</h3>
+    <div id="group-list-items" style="margin-bottom:14px"></div>
+    <button class="btn btn-dark" style="width:100%;justify-content:center;padding:10px" onclick="closeModal('group-manager-modal');openAddGroup()">+ 添加新分组</button>
+  </div>
+</div>
+
+<!-- 添加实例弹窗 -->
+<div class="modal-overlay" id="add-modal" style="display:none" onclick="if(event.target===this)closeModal('add-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <h3>添加实例</h3>
+    <div class="form-group">
+      <label class="form-label">备注名称</label>
+      <input class="form-input" id="f-name" placeholder="如：新加坡节点 1"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">SGT Token</label>
+      <input class="form-input mono" id="f-sgt" placeholder="9d4c9a5adbb44307..."/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Instance ID</label>
+        <input class="form-input mono" id="f-iid" placeholder="i-0843e8b907d1d6f65"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Profile ID</label>
+        <input class="form-input mono" id="f-pid" placeholder="6abd17ba19344279"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">检测端口</label>
+        <input class="form-input" id="f-port" value="22"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">所属分组</label>
+        <select class="form-input" id="f-group"></select>
+      </div>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">自动换IP</span>
+      <label class="toggle"><input type="checkbox" id="f-auto" checked/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">检测 IPv4</span>
+      <label class="toggle"><input type="checkbox" id="f-check4" checked/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">检测 IPv6</span>
+      <label class="toggle"><input type="checkbox" id="f-check6"/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('add-modal')">取消</button>
+      <button class="btn btn-dark" onclick="addInstance()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑实例弹窗 -->
+<div class="modal-overlay" id="edit-modal" style="display:none" onclick="if(event.target===this)closeModal('edit-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <h3>编辑实例</h3>
+    <input type="hidden" id="e-pid"/>
+    <div class="form-group">
+      <label class="form-label">备注名称</label>
+      <input class="form-input" id="e-name"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">检测端口</label>
+        <input class="form-input" id="e-port" type="number"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">所属分组</label>
+        <select class="form-input" id="e-group"></select>
+      </div>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">自动换IP</span>
+      <label class="toggle"><input type="checkbox" id="e-auto"/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">检测 IPv4</span>
+      <label class="toggle"><input type="checkbox" id="e-check4"/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">检测 IPv6</span>
+      <label class="toggle"><input type="checkbox" id="e-check6"/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('edit-modal')">取消</button>
+      <button class="btn btn-dark" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分组弹窗 -->
+<div class="modal-overlay" id="group-modal" style="display:none" onclick="if(event.target===this)closeModal('group-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <h3 id="group-modal-title">添加分组</h3>
+    <input type="hidden" id="g-id"/>
+    <div class="form-group">
+      <label class="form-label">分组名称</label>
+      <input class="form-input" id="g-name" placeholder="如：新加坡节点"/>
+    </div>
+    <div class="divider"></div>
+    <div class="settings-section">
+      <h4>Cloudflare DNS 配置（可选）</h4>
+      <div class="form-group">
+        <label class="form-label">CF Token</label>
+        <input class="form-input mono" id="g-token" placeholder="cfut_xxx..."/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Zone ID</label>
+        <input class="form-input mono" id="g-zone" placeholder="4964b5944e3a699e..."/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">解析域名</label>
+        <input class="form-input" id="g-domain" placeholder="proxy.example.com"/>
+        <div class="hint">换IP后自动更新此域名的A记录</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('group-modal')">取消</button>
+      <button class="btn btn-dark" onclick="saveGroup()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 导入弹窗 -->
+<div class="modal-overlay" id="import-modal" style="display:none" onclick="if(event.target===this)closeModal('import-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <h3>通过 SGT 导入</h3>
+    <div class="form-group">
+      <label class="form-label">SGT Token</label>
+      <input class="form-input mono" id="import-sgt" placeholder="9d4c9a5adbb44307..."/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">导入到分组</label>
+      <select class="form-input" id="import-group"></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('import-modal')">取消</button>
+      <button class="btn btn-dark" onclick="importSgt()">导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-overlay" id="settings-modal" style="display:none" onclick="if(event.target===this)closeModal('settings-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <h3>系统设置</h3>
+    <div class="settings-section">
+      <h4>监控设置</h4>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">检测间隔（秒）</label>
+          <input class="form-input" id="s-interval" type="number" min="30"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">连续失败次数</label>
+          <input class="form-input" id="s-threshold" type="number" min="1"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">默认检测端口</label>
+        <input class="form-input" id="s-port" type="number"/>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="settings-section">
+      <h4>Bark 通知</h4>
+      <div class="form-group">
+        <label class="form-label">Bark URL</label>
+        <input class="form-input" id="s-bark" placeholder="https://api.day.app/your-key"/>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="settings-section">
+      <h4>IP 上报密钥</h4>
+      <div class="form-group">
+        <input class="form-input" id="s-report-key" placeholder="设置密钥"/>
+        <div class="hint">AWS 实例开机后用此密钥推送新IP到面板</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="settings-section">
+      <h4>账号设置</h4>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">用户名</label>
+          <input class="form-input" id="s-user"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">新密码（留空不改）</label>
+          <input class="form-input" id="s-pass" type="password" placeholder="••••••••"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('settings-modal')">取消</button>
+      <button class="btn btn-dark" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 移动端菜单 -->
+<div class="modal-overlay" id="menu-modal" style="display:none" onclick="if(event.target===this)closeModal('menu-modal')">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn" style="justify-content:center;padding:12px" onclick="closeModal('menu-modal');openAddModal()">+ 添加实例</button>
+      <button class="btn" style="justify-content:center;padding:12px" onclick="closeModal('menu-modal');openImport()">⬇ 导入 SGT</button>
+      <button class="btn" style="justify-content:center;padding:12px" onclick="closeModal('menu-modal');openSettings()">⚙ 设置</button>
+      <button class="btn btn-red" style="justify-content:center;padding:12px" onclick="closeModal('menu-modal');logout()">退出登录</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const socket = io();
+let instances = [];
+let groups = [];
+let historyData = [];
+let replaceCount = 0;
+let isMobile = window.innerWidth <= 768;
+
+window.addEventListener('resize', ()=>{ isMobile = window.innerWidth <= 768; });
+
+// 移动端显示菜单按钮
+if(isMobile){
+  document.getElementById('menu-btn').style.display='';
+}
+
+socket.on('status_update', data => { updateInstanceStatus(data); updateStats(); });
+socket.on('replacing', data => {
+  const el = document.getElementById('v4-'+data.profile_id);
+  if(el) el.innerHTML = statusBadge('replacing','换IP中...');
+});
+socket.on('history_update', entry => {
+  historyData.unshift(entry);
+  if(entry.event.includes('换IP')&&entry.status==='success') replaceCount++;
+  renderHistory(); updateStats();
+});
+
+function toast(msg, type='info'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show toast-${type}`;
+  setTimeout(()=>t.className='toast', 2800);
+}
+
+function statusBadge(type, text){
+  const map={ok:'status-ok',fail:'status-fail',warn:'status-warn',unknown:'status-unknown',replacing:'status-replacing',skip:'status-skip'};
+  return `<span class="status ${map[type]||'status-unknown'}"><span class="dot"></span>${text}</span>`;
+}
+
+function parseStatus(s){
+  if(!s||s==='unknown'||s==='无IP'||s==='无IPv6') return {type:'unknown',text:s||'检测中'};
+  if(s==='未检测') return {type:'skip',text:'未检测'};
+  if(s.includes('通 ')&&!s.includes('不通')) return {type:'ok',text:s};
+  if(s.includes('不通')) return {type:'warn',text:s};
+  if(s.includes('新IP')) return {type:'ok',text:s};
+  return {type:'unknown',text:s};
+}
+
+function groupName(group_id){
+  const g = groups.find(g=>g.id===group_id);
+  return g ? g.name : '';
+}
+
+// 渲染所有实例（按分组）
+function renderInstances(){
+  const container = document.getElementById('instances-container');
+  if(!instances.length){
+    container.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:40px;text-align:center;color:var(--text3)">暂无实例，点击右上角添加</div>';
+    return;
+  }
+
+  // 按分组分类
+  const grouped = {};
+  const noGroup = [];
+  instances.forEach(inst => {
+    if(inst.group_id && groups.find(g=>g.id===inst.group_id)){
+      if(!grouped[inst.group_id]) grouped[inst.group_id] = [];
+      grouped[inst.group_id].push(inst);
+    } else {
+      noGroup.push(inst);
+    }
+  });
+
+  let html = '';
+
+  // 有分组的实例
+  groups.forEach(group => {
+    const insts = grouped[group.id] || [];
+    if(!insts.length) return;
+    const hasCF = group.cf_token && group.cf_zone_id && group.cf_domain;
+    html += `<div class="group-block">
+      <div class="group-header">
+        <span class="group-name">${group.name}</span>
+        ${hasCF ? `<span class="group-cf-badge">CF: ${group.cf_domain}</span>` : '<span class="group-no-cf">未配置CF</span>'}
+        <button class="btn btn-xs" onclick="openEditGroup('${group.id}')" style="margin-left:6px">编辑</button>
+        <button class="btn btn-xs" style="color:var(--red)" onclick="deleteGroup('${group.id}')">删除</button>
+      </div>
+      <div class="table-wrap desktop-table">
+        ${renderTable(insts)}
+      </div>
+      <div class="mobile-cards">
+        ${insts.map(inst=>renderMobileCard(inst)).join('')}
+      </div>
+    </div>`;
+  });
+
+  // 无分组实例
+  if(noGroup.length){
+    html += `<div class="group-block no-group">
+      <div class="table-wrap desktop-table">${renderTable(noGroup)}</div>
+      <div class="mobile-cards">${noGroup.map(inst=>renderMobileCard(inst)).join('')}</div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function renderTable(insts){
+  return `<table>
+    <thead><tr>
+      <th>实例</th><th>IP 地址</th><th>IPv4</th><th>IPv6</th><th>最后检测</th><th>自动换IP</th><th>操作</th>
+    </tr></thead>
+    <tbody>
+      ${insts.map(inst => {
+        const v4=parseStatus(inst.ipv4_status), v6=parseStatus(inst.ipv6_status);
+        return `<tr>
+          <td>
+            <div class="iname">${inst.name}</div>
+            <div class="iid">${inst.instance_id}</div>
+            ${inst.region?`<div class="iid">${inst.region}</div>`:''}
+          </td>
+          <td class="ip-cell">
+            <span>${inst.ipv4||'—'}</span>
+            <span style="color:var(--text3)">${inst.ipv6||''}</span>
+          </td>
+          <td id="v4-${inst.profile_id}">${statusBadge(v4.type,v4.text)}</td>
+          <td id="v6-${inst.profile_id}">${statusBadge(v6.type,v6.text)}</td>
+          <td style="color:var(--text3);font-size:12px">${inst.last_check||'—'}</td>
+          <td>
+            <button onclick="toggleAuto('${inst.profile_id}')" style="width:32px;height:18px;border-radius:9px;border:none;cursor:pointer;background:${inst.auto_replace?'var(--green)':'var(--border2)'};position:relative;transition:0.2s;flex-shrink:0">
+              <span style="position:absolute;width:12px;height:12px;background:#fff;border-radius:50%;top:3px;transition:0.2s;${inst.auto_replace?'right:3px':'left:3px'}"></span>
+            </button>
+          </td>
+          <td>
+            <div style="display:flex;gap:5px">
+              <button class="btn btn-xs btn-blue" onclick="replaceOne('${inst.profile_id}')">换IP</button>
+              <button class="btn btn-xs" onclick="openEditModal('${inst.profile_id}')">编辑</button>
+              <button class="btn btn-xs" style="color:var(--red)" onclick="deleteInstance('${inst.profile_id}')">删除</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+function renderMobileCard(inst){
+  const v4=parseStatus(inst.ipv4_status), v6=parseStatus(inst.ipv6_status);
+  return `<div class="mobile-card">
+    <div class="mobile-card-header">
+      <div>
+        <div class="mobile-card-name">${inst.name}</div>
+        <div class="mobile-card-id">${inst.instance_id}</div>
+      </div>
+      <button onclick="toggleAuto('${inst.profile_id}')" style="width:36px;height:20px;border-radius:10px;border:none;cursor:pointer;background:${inst.auto_replace?'var(--green)':'var(--border2)'};position:relative;transition:0.2s">
+        <span style="position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;transition:0.2s;${inst.auto_replace?'right:3px':'left:3px'}"></span>
+      </button>
+    </div>
+    <div class="mobile-card-ip">${inst.ipv4||'IP获取中...'} ${inst.ipv6?'/ '+inst.ipv6:''}</div>
+    <div class="mobile-card-status">
+      <span id="v4-${inst.profile_id}">${statusBadge(v4.type,'IPv4 '+v4.text)}</span>
+      <span id="v6-${inst.profile_id}">${statusBadge(v6.type,'IPv6 '+v6.text)}</span>
+    </div>
+    <div class="mobile-card-actions">
+      <button class="btn btn-sm btn-blue" onclick="replaceOne('${inst.profile_id}')">换IP</button>
+      <button class="btn btn-sm" onclick="openEditModal('${inst.profile_id}')">编辑</button>
+      <button class="btn btn-sm" style="color:var(--red)" onclick="deleteInstance('${inst.profile_id}')">删除</button>
+      <span style="font-size:11px;color:var(--text3);margin-left:auto">${inst.last_check||'—'}</span>
+    </div>
+  </div>`;
+}
+
+function updateInstanceStatus(data){
+  const inst = instances.find(i=>i.profile_id===data.profile_id);
+  if(inst) Object.assign(inst, data);
+  const v4=parseStatus(data.ipv4_status), v6=parseStatus(data.ipv6_status);
+  const v4el = document.getElementById('v4-'+data.profile_id);
+  const v6el = document.getElementById('v6-'+data.profile_id);
+  if(v4el) v4el.innerHTML = statusBadge(v4.type, isMobile?'IPv4 '+v4.text:v4.text);
+  if(v6el) v6el.innerHTML = statusBadge(v6.type, isMobile?'IPv6 '+v6.text:v6.text);
+  // 更新IP显示
+  if(inst){
+    const cells = document.querySelectorAll(`[data-pid="${data.profile_id}"]`);
+    cells.forEach(c => {
+      c.innerHTML = `<span>${data.ipv4||'—'}</span><span style="color:var(--text3)">${data.ipv6||''}</span>`;
+    });
+  }
+}
+
+function updateStats(){
+  document.getElementById('s-total').textContent = instances.length;
+  document.getElementById('s-total2').textContent = instances.length;
+  document.getElementById('s-total3').textContent = instances.length;
+  const ok4=instances.filter(i=>i.ipv4_status&&i.ipv4_status.includes('通 ')&&!i.ipv4_status.includes('不通')).length;
+  const ok6=instances.filter(i=>i.ipv6_status&&i.ipv6_status.includes('通 ')&&!i.ipv6_status.includes('不通')).length;
+  document.getElementById('s-ok4').textContent = ok4;
+  document.getElementById('s-ok6').textContent = ok6;
+  document.getElementById('s-replaced').textContent = replaceCount;
+}
+
+function renderHistory(){
+  const list = document.getElementById('history-list');
+  if(!historyData.length){list.innerHTML='<div class="history-empty">暂无记录</div>';return;}
+  const iconMap={success:'h-icon-success',error:'h-icon-error',info:'h-icon-info'};
+  const textMap={success:'✓',error:'✗',info:'i'};
+  list.innerHTML = historyData.slice(0,80).map(h=>`
+    <div class="history-item">
+      <div class="h-icon ${iconMap[h.status]||'h-icon-info'}">${textMap[h.status]||'i'}</div>
+      <div class="h-text"><strong>${h.name}</strong> · ${h.event} · ${h.detail}</div>
+      <div class="h-time">${h.time}</div>
+    </div>`).join('');
+}
+
+function populateGroupSelects(){
+  const opts = '<option value="">无分组</option>' + groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  ['f-group','e-group','import-group'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){
+      const val = el.value;
+      el.innerHTML = opts;
+      el.value = val;
+    }
+  });
+}
+
+// API
+async function refreshInstances(){
+  const resp = await fetch('/api/instances');
+  if(resp.status===401){location.href='/login';return}
+  instances = await resp.json();
+  renderInstances(); updateStats();
+}
+
+async function refreshGroups(){
+  const resp = await fetch('/api/groups');
+  groups = await resp.json();
+  populateGroupSelects();
+}
+
+async function replaceOne(profileId){
+  const inst = instances.find(i=>i.profile_id===profileId);
+  toast(`${inst?.name} 换IP中...`,'info');
+  const resp = await fetch(`/api/instances/${profileId}/replace`,{method:'POST'});
+  const data = await resp.json();
+  if(data.ok) toast(`${inst?.name} 换IP成功 ✓`,'success');
+  else toast(`换IP失败: ${data.error}`,'error');
+}
+
+async function replaceAll(){
+  if(!instances.length){toast('没有实例','error');return}
+  if(!confirm(`确认对全部 ${instances.length} 台实例换IP？`)) return;
+  await fetch('/api/instances/replace-all',{method:'POST'});
+  toast('全部换IP指令已发送','info');
+}
+
+let toggleLock={};
+async function toggleAuto(profileId){
+  if(toggleLock[profileId]) return;
+  toggleLock[profileId]=true;
+  setTimeout(()=>delete toggleLock[profileId],1000);
+  const resp = await fetch(`/api/instances/${profileId}/toggle`,{method:'POST'});
+  const data = await resp.json();
+  const inst = instances.find(i=>i.profile_id===profileId);
+  if(inst) inst.auto_replace = data.auto_replace;
+  renderInstances();
+}
+
+async function deleteInstance(profileId){
+  const inst = instances.find(i=>i.profile_id===profileId);
+  if(!confirm(`确认删除 ${inst?.name}？`)) return;
+  await fetch(`/api/instances/${profileId}`,{method:'DELETE'});
+  await refreshInstances();
+  toast('已删除','info');
+}
+
+async function clearHistory(){
+  if(!confirm('确认清空？')) return;
+  await fetch('/api/history',{method:'DELETE'});
+  historyData=[]; renderHistory();
+}
+
+// 弹窗
+function openAddModal(){
+  populateGroupSelects();
+  document.getElementById('add-modal').style.display='flex';
+}
+function openImport(){
+  populateGroupSelects();
+  document.getElementById('import-modal').style.display='flex';
+}
+function openMenu(){ document.getElementById('menu-modal').style.display='flex'; }
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+
+function openGroupManager(){
+  const list = document.getElementById('group-list-items');
+  if(!groups.length){
+    list.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px">暂无分组</div>';
+  } else {
+    list.innerHTML = groups.map(g=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-weight:500;font-size:13px">${g.name}</div>
+          ${g.cf_domain?`<div style="font-size:11px;color:var(--text3)">${g.cf_domain}</div>`:'<div style="font-size:11px;color:var(--text3)">未配置CF</div>'}
+        </div>
+        <button class="btn btn-xs" onclick="closeModal('group-manager-modal');openEditGroup('${g.id}')">编辑</button>
+        <button class="btn btn-xs" style="color:var(--red)" onclick="deleteGroup('${g.id}');closeModal('group-manager-modal')">删除</button>
+      </div>
+    `).join('');
+  }
+  document.getElementById('group-manager-modal').style.display='flex';
+}
+
+function openAddGroup(){
+  document.getElementById('group-modal-title').textContent='添加分组';
+  document.getElementById('g-id').value='';
+  document.getElementById('g-name').value='';
+  document.getElementById('g-token').value='';
+  document.getElementById('g-zone').value='';
+  document.getElementById('g-domain').value='';
+  document.getElementById('group-modal').style.display='flex';
+}
+
+function openEditGroup(groupId){
+  const g = groups.find(g=>g.id===groupId);
+  if(!g) return;
+  document.getElementById('group-modal-title').textContent='编辑分组';
+  document.getElementById('g-id').value=g.id;
+  document.getElementById('g-name').value=g.name||'';
+  document.getElementById('g-token').value=g.cf_token||'';
+  document.getElementById('g-zone').value=g.cf_zone_id||'';
+  document.getElementById('g-domain').value=g.cf_domain||'';
+  document.getElementById('group-modal').style.display='flex';
+}
+
+async function saveGroup(){
+  const id = document.getElementById('g-id').value;
+  const body={
+    name:document.getElementById('g-name').value.trim(),
+    cf_token:document.getElementById('g-token').value.trim(),
+    cf_zone_id:document.getElementById('g-zone').value.trim(),
+    cf_domain:document.getElementById('g-domain').value.trim()
+  };
+  if(!body.name){toast('名称必填','error');return}
+  const url = id ? `/api/groups/${id}` : '/api/groups';
+  const method = id ? 'PUT' : 'POST';
+  const resp = await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data = await resp.json();
+  if(data.ok){closeModal('group-modal');await refreshGroups();await refreshInstances();toast('保存成功','success')}
+  else toast('失败: '+data.error,'error');
+}
+
+async function deleteGroup(groupId){
+  const g = groups.find(g=>g.id===groupId);
+  if(!confirm(`确认删除分组 ${g?.name}？（实例不会删除）`)) return;
+  await fetch(`/api/groups/${groupId}`,{method:'DELETE'});
+  await refreshGroups();
+  await refreshInstances();
+  toast('已删除','info');
+}
+
+function openEditModal(profileId){
+  const inst = instances.find(i=>i.profile_id===profileId);
+  if(!inst) return;
+  populateGroupSelects();
+  document.getElementById('e-pid').value=profileId;
+  document.getElementById('e-name').value=inst.name||'';
+  document.getElementById('e-port').value=inst.check_port||22;
+  document.getElementById('e-group').value=inst.group_id||'';
+  document.getElementById('e-auto').checked=inst.auto_replace!==false;
+  document.getElementById('e-check4').checked=inst.check_ipv4!==false;
+  document.getElementById('e-check6').checked=inst.check_ipv6===true;
+  document.getElementById('edit-modal').style.display='flex';
+}
+
+async function saveEdit(){
+  const pid=document.getElementById('e-pid').value;
+  const body={
+    name:document.getElementById('e-name').value.trim(),
+    check_port:parseInt(document.getElementById('e-port').value)||22,
+    group_id:document.getElementById('e-group').value,
+    auto_replace:document.getElementById('e-auto').checked,
+    check_ipv4:document.getElementById('e-check4').checked,
+    check_ipv6:document.getElementById('e-check6').checked
+  };
+  const resp=await fetch(`/api/instances/${pid}/edit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await resp.json();
+  if(data.ok){closeModal('edit-modal');await refreshInstances();toast('保存成功','success')}
+  else toast('失败','error');
+}
+
+async function addInstance(){
+  const body={
+    name:document.getElementById('f-name').value.trim(),
+    sgt:document.getElementById('f-sgt').value.trim(),
+    instance_id:document.getElementById('f-iid').value.trim(),
+    profile_id:document.getElementById('f-pid').value.trim(),
+    check_port:parseInt(document.getElementById('f-port').value)||22,
+    group_id:document.getElementById('f-group').value,
+    auto_replace:document.getElementById('f-auto').checked,
+    check_ipv4:document.getElementById('f-check4').checked,
+    check_ipv6:document.getElementById('f-check6').checked
+  };
+  if(!body.sgt||!body.instance_id||!body.profile_id){toast('SGT、Instance ID、Profile ID 必填','error');return}
+  const resp=await fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await resp.json();
+  if(data.ok){closeModal('add-modal');await refreshInstances();toast('添加成功','success')}
+  else toast('失败: '+data.error,'error');
+}
+
+async function importSgt(){
+  const sgt=document.getElementById('import-sgt').value.trim();
+  const group_id=document.getElementById('import-group').value;
+  if(!sgt){toast('请填写SGT','error');return}
+  toast('导入中...','info');
+  const resp=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sgt,group_id})});
+  const data=await resp.json();
+  if(data.ok){closeModal('import-modal');await refreshInstances();toast(`导入成功，新增 ${data.added} 台`,'success')}
+  else toast('失败: '+data.error,'error');
+}
+
+async function openSettings(){
+  const resp=await fetch('/api/settings');
+  const s=await resp.json();
+  document.getElementById('s-interval').value=s.check_interval;
+  document.getElementById('s-threshold').value=s.fail_threshold;
+  document.getElementById('s-port').value=s.check_port;
+  document.getElementById('s-bark').value=s.bark_url;
+  document.getElementById('s-user').value=s.username;
+  document.getElementById('s-report-key').value=s.report_key||'';
+  document.getElementById('settings-modal').style.display='flex';
+}
+
+async function saveSettings(){
+  const body={
+    check_interval:parseInt(document.getElementById('s-interval').value),
+    fail_threshold:parseInt(document.getElementById('s-threshold').value),
+    check_port:parseInt(document.getElementById('s-port').value),
+    bark_url:document.getElementById('s-bark').value.trim(),
+    username:document.getElementById('s-user').value.trim(),
+    password:document.getElementById('s-pass').value,
+    report_key:document.getElementById('s-report-key').value.trim()
+  };
+  const resp=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await resp.json();
+  if(data.ok){closeModal('settings-modal');toast('设置已保存','success')}
+  else toast('保存失败','error');
+}
+
+async function logout(){
+  await fetch('/api/logout',{method:'POST'});
+  location.href='/login';
+}
+
+async function init(){
+  await refreshGroups();
+  await refreshInstances();
+  const hResp=await fetch('/api/history');
+  historyData=await hResp.json();
+  replaceCount=historyData.filter(h=>h.event.includes('换IP')&&h.status==='success'&&h.time.startsWith(new Date().toISOString().slice(0,10))).length;
+  renderHistory(); updateStats();
+}
+init();
+</script>
+</body>
+</html>
