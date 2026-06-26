@@ -20,7 +20,6 @@ PROXIED="${PROXIED:-false}"
 # ---- 面板上报配置（可选） ----
 PANEL_URL="${PANEL_URL:-}"
 REPORT_KEY="${REPORT_KEY:-}"
-PROFILE_ID="${PROFILE_ID:-}"
 
 DDNS_SCRIPT_PATH="/usr/local/bin/cf-ddns-dual.sh"
 LOG_PATH="/var/log/cf-ddns-dual.log"
@@ -78,7 +77,6 @@ TG_CHAT_ID="$TG_CHAT_ID"
 OLD_IP_FILE="$OLD_IP_FILE"
 PANEL_URL="$PANEL_URL"
 REPORT_KEY="$REPORT_KEY"
-PROFILE_ID="$PROFILE_ID"
 
 send_tg_notify() {
     local msg=\$1
@@ -241,5 +239,4 @@ echo "DDNS 脚本:  $DDNS_SCRIPT_PATH"
 echo "日志:       $LOG_PATH"
 echo "定时方式:   systemd timer（每分钟）"
 echo "面板上报:   ${PANEL_URL:-未配置}（每分钟上报）"
-echo "Profile ID: ${PROFILE_ID:-未配置}"
 echo "=========================================="
