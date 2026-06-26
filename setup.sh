@@ -93,7 +93,7 @@ report_to_panel() {
     curl -s --max-time 10 -X POST "\${PANEL_URL}/api/report-ip" \\
         -H "Content-Type: application/json" \\
         -H "X-Access-Key: \${REPORT_KEY}" \\
-        -d "{\\"instance_id\\": \\"\${INSTANCE_ID}\\", \\"profile_id\\": \\"\${PROFILE_ID}\\", \\"ip\\": \\"\${ip}\\", \\"ipv6\\": \\"\${ipv6}\\"}" > /dev/null 2>&1
+        -d "{\\"instance_id\\": \\"\${INSTANCE_ID}\\", \\"ip\\": \\"\${ip}\\", \\"ipv6\\": \\"\${ipv6}\\"}" > /dev/null 2>&1
 }
 
 update_dns_record() {
