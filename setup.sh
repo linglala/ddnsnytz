@@ -20,7 +20,7 @@ PROXIED="${PROXIED:-false}"
 # ---- 面板上报配置（可选） ----
 PANEL_URL="${PANEL_URL:-}"
 REPORT_KEY="${REPORT_KEY:-}"
-PROFILE_ID="${PROFILE_ID:-}"  # aws.sb 的 Profile ID，补机后用于匹配实例
+PROFILE_ID="${PROFILE_ID:-}"
 
 DDNS_SCRIPT_PATH="/usr/local/bin/cf-ddns-dual.sh"
 LOG_PATH="/var/log/cf-ddns-dual.log"
@@ -28,14 +28,12 @@ OLD_IP_FILE="/var/lib/cf-ddns-old-ip.txt"
 
 echo "=========================================="
 
-# ---- 步骤 0：设置时区为上海 ----
 echo "步骤 0: 设置时区为 Asia/Shanghai..."
 timedatectl set-timezone Asia/Shanghai 2>/dev/null \
   || ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 echo "当前时间：$(date)"
 echo "------------------------------------------"
 
-# ---- 步骤 1：检查并安装依赖 ----
 echo "步骤 1: 检查并安装依赖工具..."
 
 install_pkg() {
@@ -66,8 +64,6 @@ for tool in curl wget; do
 done
 
 echo "------------------------------------------"
-
-# ---- 步骤 2：生成 DDNS 核心脚本 ----
 echo "步骤 2: 正在生成双栈 DDNS 核心脚本..."
 
 cat << EOF > "$DDNS_SCRIPT_PATH"
@@ -96,7 +92,7 @@ report_to_panel() {
     local ipv6=\$2
     [ -z "\$PANEL_URL" ] || [ -z "\$REPORT_KEY" ] && return
     INSTANCE_ID=\$(curl -s --max-time 5 http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || echo "")
-    curl -s -X POST "\${PANEL_URL}/api/report-ip" \\
+    curl -s --max-time 10 -X POST "\${PANEL_URL}/api/report-ip" \\
         -H "Content-Type: application/json" \\
         -H "X-Access-Key: \${REPORT_KEY}" \\
         -d "{\\"instance_id\\": \\"\${INSTANCE_ID}\\", \\"profile_id\\": \\"\${PROFILE_ID}\\", \\"ip\\": \\"\${ip}\\", \\"ipv6\\": \\"\${ipv6}\\"}" > /dev/null 2>&1
@@ -159,7 +155,10 @@ if [ -z "\$CURRENT_IPV4" ] && [ -z "\$CURRENT_IPV6" ]; then
     exit 1
 fi
 
-# ---- IP 变更通知 + 面板上报 ----
+# ---- 每次都上报到面板 ----
+report_to_panel "\$CURRENT_IPV4" "\$CURRENT_IPV6"
+
+# ---- IP 变更通知 ----
 if [ -n "\$CURRENT_IPV4" ]; then
     OLD_IP=\$(cat "\$OLD_IP_FILE" 2>/dev/null)
     if [ "\$CURRENT_IPV4" != "\$OLD_IP" ]; then
@@ -177,8 +176,7 @@ if [ -n "\$CURRENT_IPV4" ]; then
         fi
         send_tg_notify "\$MSG"
         echo "\$CURRENT_IPV4" > "\$OLD_IP_FILE"
-        report_to_panel "\$CURRENT_IPV4" "\$CURRENT_IPV6"
-        echo "\$(date): 已上报新IP到面板: \$CURRENT_IPV4"
+        echo "\$(date): IP变更，已通知: \$CURRENT_IPV4"
     fi
 fi
 
@@ -191,7 +189,6 @@ chmod +x "$DDNS_SCRIPT_PATH"
 echo "成功：DDNS 脚本已生成 → $DDNS_SCRIPT_PATH"
 echo "------------------------------------------"
 
-# ---- 步骤 3：使用 systemd timer ----
 echo "步骤 3: 设置 systemd timer 定时任务（每分钟）..."
 
 cat > /etc/systemd/system/cf-ddns.service << 'UNIT'
@@ -224,18 +221,15 @@ systemctl list-timers cf-ddns.timer --no-pager
 echo "定时任务设置成功！"
 echo "------------------------------------------"
 
-# ---- 步骤 4：立即执行一次 DDNS ----
 echo "步骤 4: 立即执行一次 DDNS 检测..."
 bash "$DDNS_SCRIPT_PATH"
 echo "------------------------------------------"
 
-# ---- 步骤 5：部署 nyanpass ----
 echo "步骤 5: 部署 nyanpass 节点客户端..."
 printf '\n\n\n' | bash <(curl -fLSs https://dl.nyafw.com/download/nyanpass-install.sh) rel_nodeclient \
     "-t 5a067af7-6d14-4c43-bc11-cec264fd35b5 -u https://ny.128111.xyz"
 echo "------------------------------------------"
 
-# ---- 步骤 6：部署 komari-agent ----
 echo "步骤 6: 部署 komari-agent 监控客户端..."
 wget -qO- https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/install.sh \
     | bash -s -- -e https://tz.098757.xyz -t E4NxDKoH19Q1zlu0DPk2aH --disable-web-ssh
@@ -246,7 +240,6 @@ echo "时区:       Asia/Shanghai（$(date '+%Z %z')）"
 echo "DDNS 脚本:  $DDNS_SCRIPT_PATH"
 echo "日志:       $LOG_PATH"
 echo "定时方式:   systemd timer（每分钟）"
-echo "Telegram:   已配置（IP 变更时推送）"
-echo "面板上报:   ${PANEL_URL:-未配置}"
+echo "面板上报:   ${PANEL_URL:-未配置}（每分钟上报）"
 echo "Profile ID: ${PROFILE_ID:-未配置}"
 echo "=========================================="
