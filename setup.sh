@@ -225,7 +225,7 @@ echo "------------------------------------------"
 
 echo "步骤 5: 部署 nyanpass 节点客户端..."
 printf '\n\n\n' | bash <(curl -fLSs https://dl.nyafw.com/download/nyanpass-install.sh) rel_nodeclient \
-    "-t 5a067af7-6d14-4c43-bc11-cec264fd35b5 -u https://ny.128111.xyz"
+    "-t 8de711b2-096e-43f5-a5f0-ebd570dd31aa -u https://ny.128111.xyz"
 echo "------------------------------------------"
 
 echo "步骤 6: 部署 komari-agent 监控客户端..."
